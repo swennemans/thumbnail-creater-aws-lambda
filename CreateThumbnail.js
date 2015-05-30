@@ -25,7 +25,22 @@ exports.handler = function (event, context) {
     console.log("Reading options from event:\n", util.inspect(event, {depth: 5}));
     var srcBucket = event.Records[0].s3.bucket.name;
     // Object key may have spaces or unicode non-ASCII characters.
-    var srcKey = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));
+    var source = decodeURIComponent(event.Records[0].s3.object.key.replace(/\+/g, " "));
+
+
+    var srcKey;
+    var srcFolder = "";
+
+    //check if file is stored in a folder by detecting '/'
+    if (source.indexOf("/")) {
+        //find foldername
+        srcFolder = source.substring(0, source.lastIndexOf('/'));
+        //find filename
+        srcKey = source.slice(source.lastIndexOf('/') + 1);
+    } else {
+        srcKey = source;
+    }
+
     var dstBucket = srcBucket + "-thumbs";
 
     // Sanity check: validate that source and destination are different buckets.
@@ -52,8 +67,10 @@ exports.handler = function (event, context) {
                 // Download the image from S3 into a buffer.
                 s3.getObject({
                     Bucket: srcBucket,
-                    Key: srcKey
+                    //if image is stored in folder find it by correct name
+                    Key: srcFolder.length > 0 ? srcFolder + "/" + srcKey : srcKey
                 }, function (err, res) {
+                    console.log('Response is', res);
                     callback(null, res)
                 });
             },
@@ -160,7 +177,9 @@ exports.handler = function (event, context) {
                     var imgType = value[0];
                     s3.putObject({
                         Bucket: dstBucket,
-                        Key:  key + "-" +srcKey,
+                        //if image is stored in folder in source bucket, create the same folder name in destination
+                        // bucket
+                        Key: srcFolder.length > 0 ? srcFolder + "/" + key + "-" + srcKey : key + "-" + srcKey,
                         Body: imgBody,
                         ContentType: imgType
                     }, function (err, res) {
